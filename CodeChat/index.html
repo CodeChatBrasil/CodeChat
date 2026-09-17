@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeChat - Decoded Messaging</title>
+    <meta name="theme-color" content="#161b22">
+    <!-- Manifest PWA -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"CodeChat","short_name":"CodeChat","start_url":"./index.html","display":"standalone","background_color":"#0d1117","theme_color":"#161b22"}'>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0d1117; color: #c9d1d9; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; min-height: 100vh; }
+        .container { width: 100%; max-width: 800px; background: #161b22; padding: 20px; border-radius: 12px; border: 1px solid #30363d; box-shadow: 0 8px 24px rgba(0,0,0,0.5); position: relative; }
+        .hidden { display: none !important; }
+
+        /* LOGO ORIGINAL RECRIADA */
+        .header-logo { display: flex; justify-content: center; align-items: center; margin-bottom: 20px; }
+        .logo-svg { width: 100%; max-width: 380px; height: auto; }
+
+        /* Banner Offline */
+        .offline-banner { background: #da3633; color: white; text-align: center; padding: 6px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-bottom: 10px; }
+
+        /* Autenticação */
+        .auth-box { display: flex; flex-direction: column; gap: 10px; max-width: 400px; margin: 0 auto; }
+        .auth-box input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: white; }
+
+        /* Barra do Usuário */
+        .user-bar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #30363d; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+        .user-info { display: flex; align-items: center; gap: 8px; }
+        .user-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .color-badge { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+
+        /* Salas e Admin */
+        .sala-box { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+        .sala-box input { flex: 1; min-width: 140px; padding: 8px; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: white; }
+        .admin-panel { background: #21262d; border: 1px dashed #d29922; border-radius: 6px; padding: 10px; margin-bottom: 10px; font-size: 12px; }
+
+        /* Estatísticas */
+        .stats-bar { display: flex; justify-content: space-between; background: #0d1117; padding: 8px 12px; border-radius: 6px; border: 1px solid #30363d; font-size: 12px; margin-bottom: 10px; }
+
+        /* Chat */
+        .chat-container-relative { position: relative; }
+        .chat-box { width: 100%; height: 280px; background-color: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .btn-scroll-bottom { position: absolute; bottom: 15px; right: 15px; background: #1f6feb; color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 11px; cursor: pointer; }
+
+        .msg { padding: 8px 12px; border-radius: 8px; background: #21262d; width: fit-content; max-width: 85%; }
+        .msg .reply-quote { background: #161b22; border-left: 3px solid #58a6ff; padding: 4px 8px; font-size: 11px; color: #8b949e; margin-bottom: 6px; border-radius: 4px; }
+        .msg .autor { font-size: 11px; font-weight: bold; display: flex; justify-content: space-between; gap: 10px; }
+        .msg .texto { font-size: 15px; color: #f0f6fc; margin-top: 4px; }
+        
+        .texto b { color: #58a6ff; }
+        .texto i { color: #79c0ff; }
+        .texto code { background: #0d1117; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 13px; color: #3fb950; }
+
+        /* Teclado e Previews */
+        .preview-box { width: 100%; min-height: 40px; background-color: #0d1117; border: 1px dashed #30363d; border-radius: 6px; padding: 8px; color: #58a6ff; margin: 10px 0; font-size: 16px; word-break: break-all; }
+        .reply-preview { font-size: 11px; color: #8b949e; background: #21262d; padding: 4px 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+
+        .teclado-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; margin-bottom: 10px; }
+        .tecla { background: #21262d; border: 1px solid #30363d; border-radius: 4px; height: 40px; display: flex; justify-content: center; align-items: center; cursor: pointer; font-weight: bold; }
+        .tecla:hover { border-color: #58a6ff; background: #30363d; }
+
+        /* CENTRAL DO ODON & MINIJOGOS */
+        .games-page { display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        .odon-container { display: flex; align-items: center; gap: 15px; background: #21262d; padding: 15px; border-radius: 12px; border: 1px solid #30363d; width: 100%; }
+        .odon-speech-bubble { background: #0d1117; border: 1px solid #58a6ff; border-radius: 8px; padding: 12px; font-size: 13px; color: #f0f6fc; flex: 1; position: relative; min-height: 50px; display: flex; align-items: center; }
+        .odon-speech-bubble::before { content: ''; position: absolute; left: -8px; top: 50%; transform: translateY(-50%); border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-right: 8px solid #58a6ff; }
+
+        .games-menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; width: 100%; }
+        .game-card { background: #21262d; border: 1px solid #30363d; border-radius: 8px; padding: 15px; text-align: center; cursor: pointer; transition: transform 0.2s, border-color 0.2s; }
+        .game-card:hover { transform: translateY(-3px); border-color: #58a6ff; }
+        .game-card h3 { margin: 0 0 5px 0; color: #58a6ff; font-size: 16px; }
+        .game-card p { margin: 0; font-size: 12px; color: #8b949e; }
+
+        .game-play-area { background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 20px; width: 100%; text-align: center; }
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .option-btn { background: #21262d; border: 1px solid #30363d; color: white; padding: 12px; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; }
+        .option-btn:hover { background: #30363d; border-color: #58a6ff; }
+
+        /* Modal Editar Perfil */
+        .modal-overlay { position: fixed; top:0; left:0; width:100vw; height:100vh; background: rgba(0,0,0,0.7); display:flex; justify-content:center; align-items:center; z-index:1000; }
+        .modal-body { background:#161b22; border:1px solid #30363d; border-radius:12px; padding:20px; width:90%; max-width:400px; display:flex; flex-direction:column; gap:12px; }
+
+        /* Botões */
+        .btn { padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; color: white; background: #238636; font-size: 13px; }
+        .btn:hover { background: #2ea043; }
+        .btn-secondary { background: #30363d; }
+        .btn-secondary:hover { background: #8b949e; }
+        .btn-danger { background: #da3633; }
+        .btn-small { padding: 4px 8px; font-size: 11px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="offlineBanner" class="offline-banner hidden">⚠️ Você está Offline. O chat continuará funcionando.</div>
+
+    <!-- LOGO ORIGINAL DO CODECHAT RESTAURADA -->
+    <div class="header-logo">
+        <svg class="logo-svg" viewBox="0 0 380 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 15 15 H 145 C 153 15, 160 22, 160 30 V 75 C 160 83, 153 90, 145 90 H 40 L 20 105 V 90 H 15 C 7 90, 0 83, 0 75 V 30 C 0 22, 7 15, 15 15 Z" fill="none" stroke="#00f2ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0px 0px 6px #00f2ff);"/>
+            <text x="32" y="60" fill="#00f2ff" font-family="monospace" font-size="32" font-weight="bold" style="filter: drop-shadow(0px 0px 4px #00f2ff);">&lt;/&gt;</text>
+            <circle cx="120" cy="73" r="2" fill="#00f2ff"/>
+            <circle cx="128" cy="73" r="2" fill="#00f2ff"/>
+            <circle cx="136" cy="73" r="2" fill="#00f2ff"/>
+            <text x="175" y="62" fill="#ffffff" font-family="Arial, sans-serif" font-size="44" font-weight="bold">Code<tspan fill="#ffffff">Chat</tspan></text>
+            <text x="177" y="82" fill="#8b949e" font-family="monospace" font-size="11" letter-spacing="4">DECODED MESSAGING</text>
+        </svg>
+    </div>
+
+    <!-- AUTENTICAÇÃO -->
+    <div id="authSection" class="auth-box">
+        <input type="email" id="authEmail" placeholder="Seu E-mail">
+        <input type="password" id="authPassword" placeholder="Senha">
+        <input type="text" id="authName" placeholder="Seu Apelido" class="hidden">
+        <button class="btn" id="btnAuth" onclick="executarAuth()">Entrar</button>
+        <button class="btn btn-secondary" onclick="alternarAuth()">Criar Conta</button>
+    </div>
+
+    <!-- CHAT PRINCIPAL -->
+    <div id="chatSection" class="hidden">
+        <div class="user-bar">
+            <div class="user-info">
+                <span id="userColorBadge" class="color-badge"></span>
+                <b id="userNameDisplay">Usuário</b>
+            </div>
+            <div class="user-actions">
+                <button class="btn btn-secondary btn-small" onclick="abrirModalPerfil()">⚙️ Editar Perfil</button>
+                <button class="btn btn-secondary btn-small" onclick="abrirPaginaJogos()">🎮 Treino do Odon</button>
+                <button class="btn btn-danger btn-small" onclick="fazerLogout()">Sair</button>
+            </div>
+        </div>
+
+        <!-- SALAS PRIVADAS -->
+        <div class="sala-box">
+            <input type="text" id="nomeSala" placeholder="Nome da sala">
+            <input type="password" id="senhaSala" placeholder="Senha da sala">
+            <button class="btn btn-secondary" onclick="conectarSala()">Acessar Sala</button>
+        </div>
+
+        <!-- PAINEL ADMIN -->
+        <div id="adminPanel" class="admin-panel hidden">
+            <b>👑 Criador da Sala:</b>
+            <label style="margin-left:10px;"><input type="checkbox" id="chkSlowMode" onchange="atualizarSlowMode()"> Modo Lento (5s)</label>
+        </div>
+
+        <!-- ESTATÍSTICAS DA SALA -->
+        <div class="stats-bar">
+            <span>💬 Mensagens na Sala: <b id="statTotalMsgs">0</b></span>
+            <span>🏆 XP Rúnico: <b id="userXpDisplay">0 XP</b></span>
+        </div>
+
+        <!-- HISTÓRICO DE MENSAGENS -->
+        <div class="chat-container-relative">
+            <div id="chat" class="chat-box" onscroll="checarScroll()"></div>
+            <button id="btnScroll" class="btn-scroll-bottom hidden" onclick="rolarParaBaixo()">↓ Novas Mensagens</button>
+        </div>
+
+        <!-- DIGITAÇÃO E RESPOSTAS -->
+        <div id="replyBar" class="reply-preview hidden">
+            <span id="replyText">Respondendo a...</span>
+            <button class="btn btn-danger btn-small" onclick="cancelarResposta()">X</button>
+        </div>
+
+        <div id="preview" class="preview-box"></div>
+        <div id="teclado" class="teclado-grid"></div>
+
+        <div style="display:flex; gap:6px;">
+            <button class="btn btn-secondary" style="flex:1;" onclick="addChar(' ')">Espaço</button>
+            <button class="btn btn-danger" style="flex:1;" onclick="apagar()">⌫ Apagar</button>
+            <button class="btn" style="flex:2;" onclick="enviarMensagem()">Enviar</button>
+        </div>
+    </div>
+
+    <!-- PÁGINA EXCLUSIVA DE MINIJOGOS COM ODON -->
+    <div id="gamesSection" class="games-page hidden">
+        <div style="width:100%; display:flex; justify-content:space-between; align-items:center;">
+            <button class="btn btn-secondary btn-small" onclick="fecharPaginaJogos()">← Voltar ao Chat</button>
+            <h3 style="margin:0; color:#58a6ff;">Treino Rúnico com Odon</h3>
+            <span style="font-size:12px; font-weight:bold; color:#3fb950;" id="gamePageXp">0 XP</span>
+        </div>
+
+        <!-- MASCOTE ODON (LEÃO RÚNICO RECONSTRUÍDO) -->
+        <div class="odon-container">
+            <svg id="odonAvatar" width="85" height="85" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Juba do Leão Odon -->
+                <path id="odonMane" d="M 50 8 C 25 8, 10 30, 15 60 C 20 85, 35 95, 50 95 C 65 95, 80 85, 85 60 C 90 30, 75 8, 50 8 Z" fill="#d29922"/>
+                <!-- Cabeça de Pedra -->
+                <circle cx="50" cy="52" r="30" fill="#21262d" stroke="#58a6ff" stroke-width="3"/>
+                <!-- Orelhas -->
+                <path d="M 28 30 L 20 18 L 36 24 Z" fill="#30363d" stroke="#58a6ff" stroke-width="2"/>
+                <path d="M 72 30 L 80 18 L 64 24 Z" fill="#30363d" stroke="#58a6ff" stroke-width="2"/>
+                <!-- Olhos -->
+                <ellipse id="odonEyeL" cx="38" cy="48" rx="5" ry="6" fill="#3fb950"/>
+                <ellipse id="odonEyeR" cx="62" cy="48" rx="5" ry="6" fill="#3fb950"/>
+                <circle cx="39" cy="46" r="2" fill="#ffffff"/>
+                <circle cx="63" cy="46" r="2" fill="#ffffff"/>
+                <!-- Focinho -->
+                <polygon points="50,56 44,63 56,63" fill="#0d1117"/>
+                <path d="M 50 63 L 50 69 M 45 68 C 47 72, 50 72, 50 72 C 50 72, 53 72, 55 68" stroke="#8b949e" stroke-width="2" stroke-linecap="round"/>
+                <!-- Runa Sagrada -->
+                <path d="M 50 28 L 50 38 M 45 31 L 55 35" stroke="#58a6ff" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+            <div class="odon-speech-bubble" id="odonSpeech">
+                Saudações! Sou o Odon, o Leão Rúnico. Escolha um treino abaixo para começarmos!
+            </div>
+        </div>
+
+        <!-- SELEÇÃO DE JOGOS -->
+        <div id="gamesMenu" class="games-menu">
+            <div class="game-card" onclick="iniciarJogo('decifrador')">
+                <h3>🔍 Decifrador Rúnico</h3>
+                <p>Veja a letra em destaque e identifique a correspondente para pontuar.</p>
+            </div>
+            <div class="game-card" onclick="iniciarJogo('forca')">
+                <h3>🔤 Forca Rúnica</h3>
+                <p>Descubra a palavra secreta gravada em pedra antes que as tentativas acabem.</p>
+            </div>
+            <div class="game-card" onclick="iniciarJogo('velocidade')">
+                <h3>⚡ Caça-Runas</h3>
+                <p>Teste seus reflexos encontrando o código indicado o mais rápido possível.</p>
+            </div>
+        </div>
+
+        <!-- ÁREA DO JOGO INTERATIVO -->
+        <div id="gamePlayArea" class="game-play-area hidden">
+            <div id="gameContent"></div>
+            <button class="btn btn-secondary btn-small" style="margin-top:15px;" onclick="voltarMenuJogos()">Mudar de Jogo</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL EDITAR PERFIL -->
+<div id="modalPerfil" class="modal-overlay hidden">
+    <div class="modal-body">
+        <h3 style="margin:0; text-align:center;">Editar Perfil</h3>
+        <input type="text" id="editName" placeholder="Novo Apelido" style="padding:10px; background:#0d1117; border:1px solid #30363d; color:white; border-radius:6px;">
+        <div style="display:flex; gap:10px;">
+            <button class="btn" onclick="salvarPerfil()" style="flex:1;">Salvar</button>
+            <button class="btn btn-secondary" onclick="fecharModalPerfil()" style="flex:1;">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // CONFIGURAÇÃO DO FIREBASE (INSIRA SUAS CHAVES AQUI)
+    const firebaseConfig = {
+  apiKey: "AIzaSyDRJ9y63wDWofrswPc2r_4JpfHYY81M3Hc",
+  authDomain: "codechatoficial.firebaseapp.com",
+  databaseURL: "https://codechatoficial-default-rtdb.firebaseio.com",
+  projectId: "codechatoficial",
+  storageBucket: "codechatoficial.firebasestorage.app",
+  messagingSenderId: "233280795114",
+  appId: "1:233280795114:web:d9d3100cbd8e2d8f410293",
+  measurementId: "G-931EVT54NB"
+};
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    // SERVICE WORKER PARA SUPORTE OFFLINE / PWA
+    if ('serviceWorker' in navigator) {
+        const swCode = `
+            const CACHE_NAME = 'codechat-v3';
+            self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(['./']))));
+            self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+        `;
+        const blob = new Blob([swCode], { type: 'application/javascript' });
+        navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+    }
+
+    // MONITOR DE REDE
+    window.addEventListener('online', () => document.getElementById('offlineBanner').classList.add('hidden'));
+    window.addEventListener('offline', () => document.getElementById('offlineBanner').classList.remove('hidden'));
+
+    // VARIÁVEIS DO CHAT E USUÁRIO
+    let usuarioAtual = null;
+    let salaAtual = '';
+    let ehAdmin = false;
+    let slowModeAtivo = false;
+    let ultimaMsgTimestamp = 0;
+    let msgReplyTarget = null;
+    let totalMsgsContador = 0;
+    let userXP = 0;
+
+    // CONSTRUÇÃO DO TECLADO
+    const letras = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
+    const teclado = document.getElementById('teclado');
+    letras.forEach(l => {
+        const btn = document.createElement('div');
+        btn.className = 'tecla';
+        btn.innerText = l.toUpperCase();
+        btn.onclick = () => addChar(l);
+        teclado.appendChild(btn);
+    });
+
+    function addChar(c) { document.getElementById('preview').innerText += c; }
+    function apagar() { 
+        const p = document.getElementById('preview'); 
+        p.innerText = p.innerText.slice(0, -1); 
+    }
+
+    function aplicarMarkdown(texto) {
+        return texto
+            .replace(/\*(.*?)\*/g, '<b>$1</b>')
+            .replace(/_(.*?)_/g, '<i>$1</i>')
+            .replace(/`(.*?)`/g, '<code>$1</code>');
+    }
+
+    // AUTENTICAÇÃO
+    let modoRegistro = false;
+    function alternarAuth() {
+        modoRegistro = !modoRegistro;
+        document.getElementById('authName').classList.toggle('hidden', !modoRegistro);
+        document.getElementById('btnAuth').innerText = modoRegistro ? 'Cadastrar' : 'Entrar';
+    }
+
+    function executarAuth() {
+        const email = document.getElementById('authEmail').value;
+        const pass = document.getElementById('authPassword').value;
+        if (modoRegistro) {
+            const nome = document.getElementById('authName').value;
+            auth.createUserWithEmailAndPassword(email, pass).then(cred => {
+                db.ref('usuarios/' + cred.user.uid).set({ nome: nome, cor: '#00f2ff', xp: 0 });
+            });
+        } else {
+            auth.signInWithEmailAndPassword(email, pass);
+        }
+    }
+
+    function fazerLogout() { auth.signOut(); location.reload(); }
+
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            db.ref('usuarios/' + user.uid).on('value', snap => {
+                usuarioAtual = snap.val();
+                if (!usuarioAtual) return;
+                usuarioAtual.uid = user.uid;
+                userXP = usuarioAtual.xp || 0;
+                document.getElementById('userNameDisplay').innerText = usuarioAtual.nome;
+                document.getElementById('userColorBadge').style.backgroundColor = usuarioAtual.cor || '#00f2ff';
+                document.getElementById('userXpDisplay').innerText = userXP + ' XP';
+                document.getElementById('gamePageXp').innerText = userXP + ' XP';
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('chatSection').classList.remove('hidden');
+            });
+        }
+    });
+
+    // EDITAR PERFIL
+    function abrirModalPerfil() {
+        document.getElementById('editName').value = usuarioAtual.nome;
+        document.getElementById('modalPerfil').classList.remove('hidden');
+    }
+    function fecharModalPerfil() { document.getElementById('modalPerfil').classList.add('hidden'); }
+    function salvarPerfil() {
+        const n = document.getElementById('editName').value.trim();
+        if (n) db.ref('usuarios/' + usuarioAtual.uid).update({ nome: n }).then(fecharModalPerfil);
+    }
+
+    // NAVEGAÇÃO DE PÁGINAS
+    function abrirPaginaJogos() {
+        document.getElementById('chatSection').classList.add('hidden');
+        document.getElementById('gamesSection').classList.remove('hidden');
+        voltarMenuJogos();
+    }
+
+    function fecharPaginaJogos() {
+        document.getElementById('gamesSection').classList.add('hidden');
+        document.getElementById('chatSection').classList.remove('hidden');
+    }
+
+    // MASCOTE ODON (REACÕES VISUAIS E FALA)
+    function falarOdon(texto, estado = 'normal') {
+        document.getElementById('odonSpeech').innerText = texto;
+        const juba = document.getElementById('odonMane');
+        const eyeL = document.getElementById('odonEyeL');
+        const eyeR = document.getElementById('odonEyeR');
+
+        if (estado === 'feliz') {
+            juba.setAttribute('fill', '#238636');
+            eyeL.setAttribute('ry', '2');
+            eyeR.setAttribute('ry', '2');
+            eyeL.setAttribute('fill', '#3fb950');
+            eyeR.setAttribute('fill', '#3fb950');
+        } else if (estado === 'triste') {
+            juba.setAttribute('fill', '#da3633');
+            eyeL.setAttribute('ry', '6');
+            eyeR.setAttribute('ry', '6');
+            eyeL.setAttribute('fill', '#f85149');
+            eyeR.setAttribute('fill', '#f85149');
+        } else {
+            juba.setAttribute('fill', '#d29922');
+            eyeL.setAttribute('ry', '6');
+            eyeR.setAttribute('ry', '6');
+            eyeL.setAttribute('fill', '#58a6ff');
+            eyeR.setAttribute('fill', '#58a6ff');
+        }
+    }
+
+    // INTERATIVIDADE DOS MINIJOGOS
+    function voltarMenuJogos() {
+        document.getElementById('gamesMenu').classList.remove('hidden');
+        document.getElementById('gamePlayArea').classList.add('hidden');
+        falarOdon("Escolha um desafio rúnico! Cada resposta certa concede XP.");
+    }
+
+    function ganharXP(qnt) {
+        userXP += qnt;
+        db.ref('usuarios/' + usuarioAtual.uid).update({ xp: userXP });
+    }
+
+    function iniciarJogo(tipo) {
+        document.getElementById('gamesMenu').classList.add('hidden');
+        document.getElementById('gamePlayArea').classList.remove('hidden');
+        const container = document.getElementById('gameContent');
+
+        if (tipo === 'decifrador') {
+            falarOdon("Qual letra corresponde a este código?");
+            const letraCorreta = letras[Math.floor(Math.random() * letras.length)];
+            let opcoes = [letraCorreta];
+            while (opcoes.length < 4) {
+                let r = letras[Math.floor(Math.random() * letras.length)];
+                if (!opcoes.includes(r)) opcoes.push(r);
+            }
+            opcoes.sort(() => Math.random() - 0.5);
+
+            container.innerHTML = `
+                <h1 style="font-size:60px; color:#58a6ff; margin:10px 0;">${letraCorreta.toUpperCase()}</h1>
+                <div class="options-grid">
+                    ${opcoes.map(o => `<button class="option-btn" onclick="validarDecifrador('${o}', '${letraCorreta}')">${o.toUpperCase()}</button>`).join('')}
+                </div>
+            `;
+        } else if (tipo === 'forca') {
+            falarOdon("Adivinhe a palavra secreta!");
+            const palavras = ['code', 'chat', 'runa', 'cyber', 'texto', 'odon'];
+            const palavra = palavras[Math.floor(Math.random() * palavras.length)];
+            container.innerHTML = `
+                <div style="font-size:24px; letter-spacing:8px; color:#58a6ff; margin:20px 0;">${'_ '.repeat(palavra.length)}</div>
+                <input type="text" id="inputForca" maxlength="${palavra.length}" placeholder="Digite aqui" style="padding:10px; font-size:18px; text-align:center; background:#21262d; border:1px solid #30363d; color:white; border-radius:6px; width:80%;">
+                <br><br>
+                <button class="btn" onclick="validarForca('${palavra}')">Chutar Palavra</button>
+            `;
+        } else if (tipo === 'velocidade') {
+            falarOdon("Caça-Runas! Clique na letra certa o mais rápido que puder!");
+            gerarRodadaVelocidade();
+        }
+    }
+
+    function validarDecifrador(escolha, correta) {
+        if (escolha === correta) {
+            ganharXP(10);
+            falarOdon("Excelente! Resposta correta (+10 XP)!", 'feliz');
+        } else {
+            falarOdon(`Ops! O correto era ${correta.toUpperCase()}. Tente a próxima!`, 'triste');
+        }
+        setTimeout(() => iniciarJogo('decifrador'), 1200);
+    }
+
+    function validarForca(correta) {
+        const chute = document.getElementById('inputForca').value.toLowerCase().trim();
+        if (chute === correta) {
+            ganharXP(30);
+            falarOdon("Incrível! Você acertou a palavra toda (+30 XP)!", 'feliz');
+            setTimeout(voltarMenuJogos, 1500);
+        } else {
+            falarOdon("Palavra incorreta! Tente novamente.", 'triste');
+        }
+    }
+
+    function gerarRodadaVelocidade() {
+        const target = letras[Math.floor(Math.random() * letras.length)];
+        const container = document.getElementById('gameContent');
+        let opcoes = [target];
+        while (opcoes.length < 4) {
+            let r = letras[Math.floor(Math.random() * letras.length)];
+            if (!opcoes.includes(r)) opcoes.push(r);
+        }
+        opcoes.sort(() => Math.random() - 0.5);
+
+        container.innerHTML = `
+            <div style="font-size:14px; color:#8b949e;">Encontre o código:</div>
+            <h1 style="font-size:48px; color:#3fb950; margin:5px 0;">${target.toUpperCase()}</h1>
+            <div class="options-grid">
+                ${opcoes.map(o => `<button class="option-btn" onclick="validarVelocidade('${o}', '${target}')">${o.toUpperCase()}</button>`).join('')}
+            </div>
+        `;
+    }
+
+    function validarVelocidade(escolha, correta) {
+        if (escolha === correta) {
+            ganharXP(5);
+            falarOdon("+5 XP! Rápido!", 'feliz');
+            gerarRodadaVelocidade();
+        } else {
+            falarOdon("Incorreto! Mantenha o foco!", 'triste');
+        }
+    }
+
+    // CONEXÃO DE SALAS
+    function conectarSala() {
+        salaAtual = document.getElementById('nomeSala').value.trim();
+        const senha = document.getElementById('senhaSala').value.trim();
+        if (!salaAtual || !senha) return alert('Preencha o nome e a senha da sala!');
+
+        const roomRef = db.ref('salas_privadas/' + salaAtual);
+        roomRef.child('owner').once('value').then(snap => {
+            if (!snap.exists()) {
+                roomRef.child('owner').set(usuarioAtual.uid);
+                ehAdmin = true;
+            } else {
+                ehAdmin = snap.val() === usuarioAtual.uid;
+            }
+            document.getElementById('adminPanel').classList.toggle('hidden', !ehAdmin);
+            iniciarOuvintesSala();
+        });
+    }
+
+    function iniciarOuvintesSala() {
+        const chat = document.getElementById('chat');
+        chat.innerHTML = '';
+        totalMsgsContador = 0;
+
+        db.ref('salas_privadas/' + salaAtual + '/slowMode').on('value', snap => {
+            slowModeAtivo = snap.val() || false;
+            document.getElementById('chkSlowMode').checked = slowModeAtivo;
+        });
+
+        db.ref('salas_privadas/' + salaAtual + '/mensagens').on('child_added', snap => {
+            totalMsgsContador++;
+            document.getElementById('statTotalMsgs').innerText = totalMsgsContador;
+            renderizarMensagem(snap.key, snap.val());
+        });
+    }
+
+    function atualizarSlowMode() {
+        if (!ehAdmin) return;
+        const status = document.getElementById('chkSlowMode').checked;
+        db.ref('salas_privadas/' + salaAtual + '/slowMode').set(status);
+    }
+
+    function renderizarMensagem(id, dados) {
+        const chat = document.getElementById('chat');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'msg';
+
+        let replyHTML = '';
+        if (dados.replyTo) {
+            replyHTML = `<div class="reply-quote"><b>${dados.replyTo.autor}:</b> ${dados.replyTo.texto}</div>`;
+        }
+
+        let adminBtn = '';
+        if (ehAdmin && dados.uid !== usuarioAtual.uid) {
+            adminBtn = `<button class="btn btn-danger btn-small" onclick="expulsarUsuario('${dados.uid}')">Expulsar</button>`;
+        }
+
+        msgDiv.innerHTML = `
+            ${replyHTML}
+            <div class="autor" style="color:${dados.cor || '#00f2ff'};">
+                <span>${dados.autor}</span>
+                <div>
+                    <button class="btn btn-secondary btn-small" onclick="prepararResposta('${dados.autor}', '${dados.texto}')">↩</button>
+                    ${adminBtn}
+                </div>
+            </div>
+            <div class="texto">${aplicarMarkdown(dados.texto)}</div>
+        `;
+
+        chat.appendChild(msgDiv);
+        
+        if (chat.scrollHeight - chat.scrollTop <= chat.clientHeight + 100) {
+            rolarParaBaixo();
+        } else {
+            document.getElementById('btnScroll').classList.remove('hidden');
+        }
+    }
+
+    function expulsarUsuario(uid) {
+        if (!confirm('Deseja expulsar este usuário?')) return;
+        db.ref('salas_privadas/' + salaAtual + '/expulsos/' + uid).set(true);
+        alert('Usuário banido com sucesso.');
+    }
+
+    // THREADS DE RESPOSTA
+    function prepararResposta(autor, texto) {
+        msgReplyTarget = { autor, texto };
+        document.getElementById('replyText').innerText = `Respondendo a ${autor}: "${texto.slice(0, 20)}..."`;
+        document.getElementById('replyBar').classList.remove('hidden');
+    }
+
+    function cancelarResposta() {
+        msgReplyTarget = null;
+        document.getElementById('replyBar').classList.add('hidden');
+    }
+
+    // CONTROLE DE SCROLL
+    function checarScroll() {
+        const chat = document.getElementById('chat');
+        if (chat.scrollHeight - chat.scrollTop <= chat.clientHeight + 50) {
+            document.getElementById('btnScroll').classList.add('hidden');
+        }
+    }
+
+    function rolarParaBaixo() {
+        const chat = document.getElementById('chat');
+        chat.scrollTop = chat.scrollHeight;
+        document.getElementById('btnScroll').classList.add('hidden');
+    }
+
+    // ENVIAR MENSAGENS
+    function enviarMensagem() {
+        const agora = Date.now();
+        if (slowModeAtivo && !ehAdmin && agora - ultimaMsgTimestamp < 5000) {
+            return alert('Modo lento ativo! Aguarde 5 segundos.');
+        }
+
+        const preview = document.getElementById('preview');
+        const texto = preview.innerText.trim();
+        if (!texto || !salaAtual) return;
+
+        ultimaMsgTimestamp = agora;
+
+        db.ref('salas_privadas/' + salaAtual + '/mensagens').push({
+            autor: usuarioAtual.nome,
+            uid: usuarioAtual.uid,
+            cor: usuarioAtual.cor || '#00f2ff',
+            texto: texto,
+            replyTo: msgReplyTarget,
+            timestamp: agora
+        });
+
+        preview.innerText = '';
+        cancelarResposta();
+    }
+</script>
+
+</body>
+</html>
